@@ -1,0 +1,407 @@
+<html>
+
+<head>
+
+<!-- script files for webgl set up and math operations -->
+<script type="text/javascript" src="webgl-utils.js"></script>
+<script type="text/javascript" src="init-shaders.js"></script>
+<script type="text/javascript" src="math.js"></script>
+
+<!-- vertex shader -->
+<script id="vertex-shader" type="x-shader/x-vertex">
+attribute vec4 aPosition;
+attribute vec4 aColor;
+varying vec4 vColor;
+uniform mat4 uViewMatrix;
+uniform mat4 uProjectMatrix;
+uniform mat4 uModelMatrix;
+void main()
+{
+	gl_Position = uProjectMatrix*uViewMatrix*uModelMatrix*aPosition;
+	
+	vColor = aColor;
+}
+</script>
+
+<!-- Fragment Shader -->
+<script id="fragment-shader" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 vColor;
+void main()
+{
+	gl_FragColor = vColor;
+}
+</script>
+<script>
+var gl;
+var uProjectMatrix;
+var uViewMatrix;
+var uModelMatrix;
+var eye, at, up;
+var mouseX, mouseZ;
+var playerX, playerZ;
+var direction;
+var mouseTime;
+var viewMatrix;
+//main drawing function
+function main()
+{
+	//set up webgl
+	var canvas = document.getElementById("gl-canvas");
+    gl = WebGLUtils.setupWebGL(canvas);
+    
+    //set up shaders
+    var program = initShaders(gl, "vertex-shader", "fragment-shader");
+    gl.useProgram(program);
+	
+	//make cube
+	var vertices = [];
+	var colors = [];
+	
+	//push square ground data
+	vertices.push(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 1100.0),
+		vec3(1100.0, 0.0, 1100.0), vec3(1100.0, 0.0, 0.0));
+	colors.push(vec3(0.7,0.3,0.1), vec3(0.7,0.3,0.1),
+		vec3(0.7,0.3,0.1), vec3(0.7,0.3,0.1));
+		
+	makeColorCube(vertices, colors);
+	
+	
+
+    //create vertex buffer and bind it
+    var vertexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+	
+	//connect vertex bufffer to attribute variable aPosition
+    var aPosition = gl.getAttribLocation(program, "aPosition");
+    gl.vertexAttribPointer(aPosition, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(aPosition);
+	
+	gl.bufferData(gl.ARRAY_BUFFER, flatten(vertices), gl.STATIC_DRAW);
+	
+	var colorBuffer = gl.createBuffer();
+	gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+	
+	//connect color buffer to attribute variable aColor
+	var aColor = gl.getAttribLocation(program, "aColor");
+	gl.vertexAttribPointer(aColor, 3, gl.FLOAT, false, 0, 0);
+	gl.enableVertexAttribArray(aColor);
+	
+	gl.bufferData(gl.ARRAY_BUFFER, flatten(colors), gl.STATIC_DRAW);
+	
+	gl.clearColor(0.0, 0.0, 0.0, 1.0);
+	
+	gl.enable(gl.DEPTH_TEST);
+	
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	
+	gl.viewport(0, 0, canvas.width, canvas.height);
+	
+	uViewMatrix = gl.getUniformLocation(program, "uViewMatrix");
+	uProjectMatrix = gl.getUniformLocation(program, "uProjectMatrix");
+	uModelMatrix = gl.getUniformLocation(program, "uModelMatrix");
+	
+	//set up view
+	//get random values
+	//var initx = 0, initz = 0;
+	while(!(initx % 2 == 0 && initz % 2 == 0))
+	{
+		var initx = Math.floor(Math.random()*10+1);
+		var initz = Math.floor(Math.random()*10+1);
+	}
+	//random direction
+	direction = Math.floor(Math.random()*4);
+	
+	//initial player location
+	eye = vec3(100*initx-50, 25, 100*initz-50);
+	//saved player locations
+	playerX = initx;
+	playerZ = initz;
+	//set up initial at based on direction
+	if(direction == 0)
+	{
+		at = vec3(100*initx+50, 25, 100*initz-50);
+	}
+	else if(direction == 1)
+	{
+		at = vec3(100*initx-50, 25, 100*initz+50);
+	}
+	else if(direction == 2)
+	{
+		at = vec3(100*initx-150, 25, 100*initz-50);
+	}
+	else if(direction == 3)
+	{
+		at = vec3(100*initx-50, 25, 100*initz-150);
+	}
+	up = vec3(0, 1, 0);
+	
+	viewMatrix = lookat(eye, at, up);
+	gl.uniformMatrix4fv(uViewMatrix, false, flatten(viewMatrix));
+	
+	//set up perspective view
+	var angle = 65;
+	var aspect = 1;
+	var near = 1;
+	var far = 10000;
+	
+	var projectMatrix = perspective(angle, aspect, near, far);
+	gl.uniformMatrix4fv(uProjectMatrix, false, flatten(projectMatrix));
+	
+	//initialize mouse
+	while(!(mouseX % 2 == 0 && mouseZ % 2 == 0))
+	{
+		mouseX = Math.floor(Math.random()*10+1);
+		mouseZ = Math.floor(Math.random()*10+1);
+	}
+	
+	
+	mouseTime = 0.0;
+	
+	draw();
+}
+
+function draw()
+{
+	gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+	//draw ground
+	gl.uniformMatrix4fv(uModelMatrix, false, flatten(identity()));
+	gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+	
+	//draw cubes
+	var matrix;
+	for(var i = 0; i < 11; i += 2)
+	{
+		for(var j = 0; j < 11; j += 2)
+		{
+			matrix = scaling(50, 50, 50);
+			matrix = multiply(translate(100*i+50, 50, 100*j+50), matrix);
+			gl.uniformMatrix4fv(uModelMatrix, false, flatten(matrix));
+			gl.drawArrays(gl.TRIANGLES, 4, 36);
+		}
+	}
+	
+	//draw mouse
+	//increment mousetime
+	mouseTime += 1.0;
+	//change mouse location
+	if(mouseTime >= 100)
+	{
+		mouseTime = 0.0;
+		var mouseDir = Math.floor(Math.random()*4);
+		
+		if(mouseDir == 0.0)
+		{
+			//check bounds
+			if(mouseX+1 <= 10 && !((mouseX+1)%2 == 0 && mouseZ%2 == 0))
+				mouseX += 1;
+		}
+		else if(mouseDir == 1.0)
+		{
+			//check bounds
+			if(mouseZ+1 <= 10 && !((mouseZ+1)%2 == 0 && mouseX%2 == 0))
+				mouseZ += 1;
+		}
+		else if(mouseDir == 2.0)
+		{
+			//check bounds
+			if(mouseX-1 >= 0 && !((mouseX-1)%2 == 0 && mouseZ%2 == 0))
+				mouseX -= 1;
+		}
+		else if(mouseDir == 3.0)
+		{
+			//check bounds
+			if(mouseZ-1 >= 0 && !((mouseZ-1)%2 == 0 && mouseX%2 == 0))
+				mouseZ -= 1;
+		}
+	}
+	//send mouse matrix
+	matrix = scaling(2.5, 2.5, 2.5);
+	matrix = multiply(translate(100*mouseX+50, 2.5, 100*mouseZ+50), matrix);
+	gl.uniformMatrix4fv(uModelMatrix, false, flatten(matrix));
+	gl.drawArrays(gl.TRIANGLES, 4, 36);
+	
+	requestAnimationFrame(draw);
+}
+
+//function to make cube
+function makeColorCube(vertexArray, colorArray)
+{
+	//8 vertices of cube
+	var v1 = vec3(-1,1,1), v2 = vec3(1,1,1),
+		v3 = vec3(1,-1,1), v4 = vec3(-1,-1,1),
+		v5 = vec3(-1,1,-1), v6= vec3(1,1,-1),
+		v7 = vec3(1,-1,-1), v8= vec3(-1,-1,-1);
+		
+	//6 faces of cube, each face is 2 triangles
+	vertexArray.push(v1, v2, v3, v1, v3, v4,
+					 v1, v5, v6, v1, v6, v2,
+					 v2, v6, v7, v2, v7, v3,
+					 v5, v6, v7, v5, v7, v8,
+					 v4, v8, v7, v4, v7, v3,
+					 v1, v5, v8, v1, v8, v4);
+					 
+	//6 colors of cube faces
+	var red = vec3(1,0,0), green = vec3(0,1,0), blue = vec3(0,0,1),
+		yellow = vec3(1,1,0), brown = vec3(0.7,0.3,0.1), white = vec3(1,1,1);
+		
+	//cube face colors
+	colorArray.push(red, red, red, red, red, red,
+					white, white, white, white, white, white,
+					yellow, yellow, yellow, yellow, yellow, yellow,
+					blue, blue, blue, blue, blue, blue,
+					brown, brown, brown, brown, brown, brown,
+					green, green, green, green, green, green);
+}
+
+//function to move the player forward
+function forward()
+{
+	//go right
+	if(direction == 0)
+	{
+		//check bounds
+		if(playerX < 11)
+		{
+			if(playerZ%2 == 0)
+			{
+				//update player location and at
+				playerX += 1;
+				at = vec3(100*playerX+50, 25, 100*playerZ-50);
+			}
+		}
+	}
+	//go forward in z
+	else if(direction == 1)
+	{
+		//check bounds
+		if(playerZ < 11)
+		{
+			if(playerX%2 == 0)
+			{
+				//update player location and at
+				playerZ += 1;
+				at = vec3(100*playerX-50, 25, 100*playerZ+50);
+			}
+		}
+	}
+	//go left
+	else if(direction == 2)
+	{
+		//check bounds
+		if(playerX > 1)
+		{
+			if(playerZ%2 == 0)
+			{
+				//update player location and at
+				playerX -= 1;
+				at = vec3(100*playerX-150, 25, 100*playerZ-50);
+			}
+		}
+	}
+	//go backward in z
+	else if(direction == 3)
+	{
+		//check bounds
+		if(playerZ > 1)
+		{
+			if(playerX%2 == 0)
+			{
+				//update player location and at
+				playerZ -= 1;
+				at = vec3(100*playerX-50, 25, 100*playerZ-150);
+			}
+		}
+	}
+	//send new player location
+	eye = vec3(100*playerX-50, 25, 100*playerZ-50);
+	viewMatrix = lookat(eye, at, up);
+	gl.uniformMatrix4fv(uViewMatrix, false, flatten(viewMatrix));
+}
+
+//function to turn the viewer left
+function left()
+{
+	//update direction
+	if(direction == 3)
+	{
+		direction = 0;
+	}
+	else
+	{
+		direction += 1;
+	}
+	
+	//update at based on direction
+	if(direction == 0)
+	{
+		at = vec3(100*playerX+50, 25, 100*playerZ-50);
+	}
+	else if(direction == 1)
+	{
+		at = vec3(100*playerX-50, 25, 100*playerZ+50);
+	}
+	else if(direction == 2)
+	{
+		at = vec3(100*playerX-150, 25, 100*playerZ-50);
+	}
+	else if(direction == 3)
+	{
+		at = vec3(100*playerX-50, 25, 100*playerZ-150);
+	}
+	//send new view matrix
+	viewMatrix = lookat(eye, at, up);
+	gl.uniformMatrix4fv(uViewMatrix, false, flatten(viewMatrix));
+}
+
+//function to turn the viewer right
+function right()
+{
+	//update direction
+	if(direction == 0)
+	{
+		direction = 3;
+	}
+	else
+	{
+		direction -= 1;
+	}
+	
+	//update at based on direction
+	if(direction == 0)
+	{
+		at = vec3(100*playerX+50, 25, 100*playerZ-50);
+	}
+	else if(direction == 1)
+	{
+		at = vec3(100*playerX-50, 25, 100*playerZ+50);
+	}
+	else if(direction == 2)
+	{
+		at = vec3(100*playerX-150, 25, 100*playerZ-50);
+	}
+	else if(direction == 3)
+	{
+		at = vec3(100*playerX-50, 25, 100*playerZ-150);
+	}
+	//send new view matrix
+	viewMatrix = lookat(eye, at, up);
+	gl.uniformMatrix4fv(uViewMatrix, false, flatten(viewMatrix));
+}
+</script>
+
+</head>
+
+<!-- draw scene -->
+<body onload="main()">
+
+<!-- canvas for drawing scene -->
+<canvas id="gl-canvas" width="500" height="500"></canvas>
+<br>
+<button id="forward" onclick="forward()">Forward</button>
+<button id="left" onclick="left()">Turn Left</button>
+<button id="right" onclick="right()">Turn Right</button>
+
+</body>
+
+</html>
